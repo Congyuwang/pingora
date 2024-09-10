@@ -313,7 +313,8 @@ impl Session {
         Session {
             downstream_session: downstream_session.into(),
             cache: HttpCache::new(),
-            upstream_compression: ResponseCompressionCtx::new(0, false), // disable both
+            // disable both upstream and downstream compression
+            upstream_compression: ResponseCompressionCtx::new(0, false, false),
             ignore_downstream_range: false,
             subrequest_ctx: None,
             downstream_modules_ctx: downstream_modules.build_ctx(),
@@ -606,6 +607,8 @@ impl<SV> HttpProxy<SV> {
         };
 
         if let Some(e) = final_error.as_ref() {
+            // If we have errored and are still holding a cache lock, release it.
+            session.cache.disable(NoCacheReason::InternalError);
             let status = self.inner.fail_to_proxy(&mut session, e, &mut ctx).await;
 
             // final error will have > 0 status unless downstream connection is dead

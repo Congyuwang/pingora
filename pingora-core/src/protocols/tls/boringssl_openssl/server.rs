@@ -14,7 +14,7 @@
 
 //! TLS server specific implementation
 
-use super::SslStream;
+use crate::protocols::tls::SslStream;
 use crate::protocols::{Shutdown, IO};
 use crate::tls::ext;
 use crate::tls::ext::ssl_from_acceptor;
@@ -143,6 +143,7 @@ impl<S: AsyncRead + AsyncWrite + Send + Unpin> ResumableAccept for SslStream<S> 
 }
 
 #[tokio::test]
+#[cfg(feature = "some_tls")]
 async fn test_async_cert() {
     use tokio::io::AsyncReadExt;
     let acceptor = ssl::SslAcceptor::mozilla_intermediate_v5(ssl::SslMethod::tls())
