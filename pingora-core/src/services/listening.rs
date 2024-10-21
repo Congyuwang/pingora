@@ -171,12 +171,8 @@ impl<A: ServerApp + Send + Sync + 'static> Service<A> {
                     let app = app_logic.clone();
                     let shutdown = shutdown.clone();
                     current_handle().spawn(async move {
-                        match io.handshake().await {
-                            Ok(io) => Self::handle_event(io, app, shutdown).await,
-                            Err(e) => {
-                                // TODO: Maybe IOApp trait needs a fn to handle/filter our this error
-                                error!("Downstream handshake error {e}");
-                            }
+                        if let Ok(io) = io.handshake().await {
+                            Self::handle_event(io, app, shutdown).await;
                         }
                     });
                 }
