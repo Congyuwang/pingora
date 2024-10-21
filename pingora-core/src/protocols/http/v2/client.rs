@@ -30,7 +30,7 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::sync::watch;
 
 use crate::connectors::http::v2::ConnectionRef;
-use crate::protocols::{Digest, SocketAddr};
+use crate::protocols::{Digest, SocketAddr, UniqueIDType};
 
 pub const PING_TIMEDOUT: ErrorType = ErrorType::new("PingTimedout");
 
@@ -310,7 +310,7 @@ impl Http2Session {
         Some(self.conn.digest())
     }
 
-    /// Return a mutable [Digest] reference for the connection, see [`digest`] for more details.
+    /// Return a mutable [Digest] reference for the connection
     ///
     /// Will return `None` if multiple H2 streams are open.
     pub fn digest_mut(&mut self) -> Option<&mut Digest> {
@@ -336,7 +336,7 @@ impl Http2Session {
     }
 
     /// the FD of the underlying connection
-    pub fn fd(&self) -> i32 {
+    pub fn fd(&self) -> UniqueIDType {
         self.conn.id()
     }
 
@@ -427,7 +427,7 @@ use tokio::sync::oneshot;
 
 pub async fn drive_connection<S>(
     mut c: client::Connection<S>,
-    id: i32,
+    id: UniqueIDType,
     closed: watch::Sender<bool>,
     ping_interval: Option<Duration>,
     ping_timeout_occurred: Arc<AtomicBool>,
@@ -481,7 +481,7 @@ async fn do_ping_pong(
     interval: Duration,
     tx: oneshot::Sender<()>,
     dropped: Arc<AtomicBool>,
-    id: i32,
+    id: UniqueIDType,
 ) {
     // delay before sending the first ping, no need to race with the first request
     tokio::time::sleep(interval).await;
