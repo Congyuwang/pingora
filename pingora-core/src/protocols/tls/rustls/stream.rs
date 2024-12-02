@@ -21,13 +21,13 @@ use std::time::{Duration, SystemTime};
 
 use crate::listeners::tls::Acceptor;
 use crate::protocols::raw_connect::ProxyDigest;
-use crate::protocols::{tls::SslDigest, Peek, TimingDigest};
+use crate::protocols::{tls::SslDigest, Peek, TimingDigest, UniqueIDType};
 use crate::protocols::{
     GetProxyDigest, GetSocketDigest, GetTimingDigest, SocketDigest, Ssl, UniqueID, ALPN,
 };
 use crate::utils::tls::get_organization_serial_bytes;
 use pingora_error::ErrorType::{AcceptError, ConnectError, InternalError, TLSHandshakeFailure};
-use pingora_error::{Error, ImmutStr, OrErr, Result};
+use pingora_error::{OkOrErr, OrErr, Result};
 use pingora_rustls::TlsStream as RusTlsStream;
 use pingora_rustls::{hash_certificate, NoDebug};
 use pingora_rustls::{Accept, Connect, ServerName, TlsConnector};
@@ -216,7 +216,7 @@ impl<T> UniqueID for TlsStream<T>
 where
     T: UniqueID,
 {
-    fn id(&self) -> i32 {
+    fn id(&self) -> UniqueIDType {
         self.tls.stream.as_ref().unwrap().get_ref().0.id()
     }
 }
@@ -273,40 +273,32 @@ impl<T: AsyncRead + AsyncWrite + Unpin + Send> InnerStream<T> {
     /// Connect to the remote TLS server as a client
     pub(crate) async fn connect(&mut self) -> Result<()> {
         let connect = &mut (*self.connect);
+        let connect = connect.take().or_err(
+            ConnectError,
+            "TLS connect not available to perform handshake.",
+        )?;
 
-        if let Some(connect) = connect.take() {
-            let stream = connect
-                .await
-                .or_err(TLSHandshakeFailure, "tls connect error")?;
-            self.stream = Some(RusTlsStream::Client(stream));
-
-            Ok(())
-        } else {
-            Error::e_explain(
-                ConnectError,
-                ImmutStr::from("TLS connect not available to perform handshake."),
-            )
-        }
+        let stream = connect
+            .await
+            .or_err(TLSHandshakeFailure, "tls connect error")?;
+        self.stream = Some(RusTlsStream::Client(stream));
+        Ok(())
     }
 
     /// Finish the TLS handshake from client as a server
     /// no-op implementation within Rustls, handshake is performed during creation of stream.
     pub(crate) async fn accept(&mut self) -> Result<()> {
         let accept = &mut (*self.accept);
+        let accept = accept.take().or_err(
+            AcceptError,
+            "TLS accept not available to perform handshake.",
+        )?;
 
-        if let Some(ref mut accept) = accept.take() {
-            let stream = accept
-                .await
-                .explain_err(TLSHandshakeFailure, |e| format!("tls connect error: {e}"))?;
-            self.stream = Some(RusTlsStream::Server(stream));
-
-            Ok(())
-        } else {
-            Err(Error::explain(
-                AcceptError,
-                ImmutStr::from("TLS accept not available to perform handshake."),
-            ))
-        }
+        let stream = accept
+            .await
+            .explain_err(TLSHandshakeFailure, |e| format!("tls connect error: {e}"))?;
+        self.stream = Some(RusTlsStream::Server(stream));
+        Ok(())
     }
 
     pub(crate) fn digest(&mut self) -> Option<Arc<SslDigest>> {
